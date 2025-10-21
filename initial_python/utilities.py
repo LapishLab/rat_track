@@ -67,3 +67,8 @@ def select_points(video_path, point_names):
             else:
                 cv2.destroyAllWindows()
                 return points
+
+def check_table_headers(df, headers):
+    for h in headers:
+        if h not in df:
+            raise ValueError(f'table missing "{h}" column')
