@@ -62,22 +62,6 @@ def main(job_folder):
     overwrite_video_info(job_folder, vi)
 
 
-def generate_id(vid_path, subject):
-    id = []
-    for i in range(len(vid_path)):
-        if not vid_path[i]:
-            id.append(None)
-            continue
-
-        p = Path(vid_path[i])
-        if not p.is_file():
-            id.append(None)
-            continue
-
-        filename = p.stem
-        id.append(f"{filename}_subject{subject[i]}")
-    return id
-
 def get_video_path(pi_folder):
     cam_dir = pi_folder+"/cam"
     for filename in os.listdir(cam_dir):
@@ -88,14 +72,12 @@ def get_video_path(pi_folder):
 
 def is_corrupt(video_path):
     try:
-        vid = VideoReader(video_path)
+        VideoReader(video_path)
         return False
     except:
         print(f"failed to load with VideoReader: {video_path}")
         return True
 
-
-    return None
 if __name__ == "__main__":
     job_folder = sys.argv[1]
     main(job_folder)
