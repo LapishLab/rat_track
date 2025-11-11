@@ -47,19 +47,9 @@ def main(job_folder):
         pcutoff = 0,
         overwrite = True,
         dotsize=1,
-        draw_skeleton=True,
+        draw_skeleton=False,
         shuffle=shuffle
     )
-
-    deeplabcut.analyzeskeleton(
-        config=config,
-        videos=videos,
-        destfolder=destfolder,
-        save_as_csv=True,
-        filtered=True,
-        shuffle=shuffle
-    )
-
     organize_results(destfolder)
 
 def organize_results(destfolder):
