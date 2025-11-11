@@ -5,8 +5,8 @@ import glob
 import sys
 
 def main(job_folder):
-    config = "/home/lapishla/Desktop/dlc-ephys/config.yaml" # TODO make not hard coded. Put model in repository?
-    videos = os.path.join(job_folder, "videos")
+    config = "/home/lapishla/Desktop/dlc_networks/2CAP-Pi/config.yaml" # TODO make not hard coded. Put model in repository?
+    videos = job_folder
     destfolder = os.path.join(job_folder, "dlc_results")
     os.makedirs(destfolder, exist_ok=True)
 
