@@ -1,16 +1,16 @@
-#!/home/lapishla/miniconda3/envs/DEEPLABCUT/bin/python3
+#!/home/lapishla/miniconda3/envs/dlc/bin/python3
 import deeplabcut
 import os
 import glob
 import sys
 
-def main(job_folder):
-    config = "/home/lapishla/Desktop/dlc_networks/2CAP-Pi/config.yaml" # TODO make not hard coded. Put model in repository?
+def main(job_folder, shuffle=3):
+    config = "/home/lapishla/Desktop/dlc/networks/2CAP-Pi/config.yaml" # TODO make not hard coded. Put model in repository?
     videos = job_folder
-    destfolder = os.path.join(job_folder, "dlc_results")
+    destfolder = os.path.join(job_folder, f"dlc_results_shuffle{shuffle}")
     os.makedirs(destfolder, exist_ok=True)
 
-    shuffle = 1
+    shuffle = int(shuffle)
 
     deeplabcut.analyze_videos(
         config=config,
