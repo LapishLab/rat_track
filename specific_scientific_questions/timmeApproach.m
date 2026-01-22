@@ -26,7 +26,7 @@ video_table = load_video_csv(job_folder);
 
 % For getting average gaze and distance
 common_time = -5:1/15:5;
-all_gaze = zeros(height(video_table), 48, length(common_time));
+all_gaze = nan(height(video_table), 48, length(common_time));
 all_dist = all_gaze;
 
 for ind=1:height(video_table) % Loop through videos
@@ -34,8 +34,11 @@ for ind=1:height(video_table) % Loop through videos
     video_path=[job_folder filesep 'videos' filesep id '.mp4'];
 
     % load OE events
+    try
     oe_events = load_oe_events(video_table.oe_export_folder{ind});
     poi = load_poi(job_folder, id);
+
+
 
     % load tracking (also loads oe time sync)
     tracking = get_all_tracking(job_folder, id);
@@ -65,10 +68,20 @@ for ind=1:height(video_table) % Loop through videos
 
         sip_dist_pix = calc_dist_to_sipper(trial, sipper);
         sip_dist_mm = sip_dist_pix*scale_factor(poi);
-
+        
+        approachInd = find(sip_dist_mm < 55);
+        if ~isempty(approachInd)
+            approachTime = trial.time_oe(approachInd(1,1));
+        else
+            approachTime = NaN;
+        end
         
         all_dist(ind, ind_t, :) = interp1(t_time, sip_dist_mm, common_time, 'linear','extrap');
+        allApproach(ind, ind_t) = approachTime;
+    end
+    catch
+        continue
     end
 end
 
-
+%% Save and export
