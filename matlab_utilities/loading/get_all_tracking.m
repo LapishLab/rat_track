@@ -1,18 +1,19 @@
 function tracking = get_all_tracking(job_folder, id)
-    dlc_results = [job_folder filesep 'dlc_results' filesep];
+    dlc_results = fullfile(job_folder,'dlc_results', id);
+
+    if ~exist(dlc_results, "dir")
+        error("DLC result folder not found at %s", dlc_results)
+    end
 
     % load filtered xy position
-    file = [dlc_results 'xy_filtered' filesep  id '*_filtered.csv'];
-    tracking = load_tracking_csv(file, [2,3]);
-   
-    % load skeleton
-    file = [dlc_results 'skeleton' filesep  id '*_skeleton.csv'];
-    skeleton = load_tracking_csv(file, [1,2]);
+    file = dir(fullfile(dlc_results, '*_filtered.csv'));
+    if isempty(file)
+        error("No matching filtered tracking csv found for %s", id)
+    elseif length(file)>1
+        error("More than 1 filtered tracking csv found for %s", id)
+    end
+    tracking = load_tracking_csv(fullfile(file.folder,file.name), [2,3]);
     
-    % merge skeleton and xy position into a single table
-    skeleton = removevars(skeleton, 'frame'); % remove duplicate "frame" column
-    tracking = cat(2, tracking, skeleton);
-
    % % load frame to OE time syncing data
     %oe_sync = load_oe_video_sync(job_folder,id);
     %%rename column names for clarity when concatonated to tracking info
@@ -29,7 +30,7 @@ function tracking = load_tracking_csv(csv_path, header_lines)
     header_rows = cell(max(header_lines), 1);
     fid = fopen(csv_path, 'r');
     for i=1:max(header_lines)
-        header_rows{i} = strsplit(fgetl(fid), ',');
+        header_rows{i} = strsplit(fgets(fid), ',');
     end
     fclose(fid); % Close the file
 
