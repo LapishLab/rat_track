@@ -13,11 +13,11 @@ function tracking = get_all_tracking(job_folder, id)
     skeleton = removevars(skeleton, 'frame'); % remove duplicate "frame" column
     tracking = cat(2, tracking, skeleton);
 
-    % load frame to OE time syncing data
-    oe_sync = load_oe_video_sync(job_folder,id);
-    %rename column names for clarity when concatonated to tracking info
-    oe_sync.Properties.VariableNames = "time_" + oe_sync.Properties.VariableNames;
-    tracking = cat(2, oe_sync, tracking);
+   % % load frame to OE time syncing data
+    %oe_sync = load_oe_video_sync(job_folder,id);
+    %%rename column names for clarity when concatonated to tracking info
+    %oe_sync.Properties.VariableNames = "time_" + oe_sync.Properties.VariableNames;
+    %tracking = cat(2, oe_sync, tracking);
 end
 
 function tracking = load_tracking_csv(csv_path, header_lines)
