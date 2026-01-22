@@ -1,7 +1,4 @@
-pi_folder = "/datastar/behavior_rooms/2CAP/2025-07-02_09-03-45_PV2CAP_group1/pi-data_2025-07-02_09-03-45_PV2CAP_group1/box01";
-trial_start_times(pi_folder)
-
-function [video_times, video_frames] = trial_start_times(pi_folder)
+function [video_times, video_frames] = extract_2CAP_trials(pi_folder)
     %% get the datetime of each trial according to gpio sync signal
     sync_path = fullfile(pi_folder, "gpio", "*.csv");
     sync_path = wildcard_path(sync_path);
