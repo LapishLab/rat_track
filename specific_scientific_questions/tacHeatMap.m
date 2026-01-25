@@ -24,7 +24,22 @@ for ind=1:height(video_table) % Loop through videos
     poi = load_poi(job_folder, id);
     tracking = get_all_tracking(job_folder, id);
     [tracking_mm, poi_mm] = tranform2universalCoords(tracking, poi, poi(["sipper_left", "sipper_right"],:));
-
+    
+    % Mirror X so TAC is always on right
+    if strcmp(video_table.tac_side{ind}, 'l')
+        % multiply tracking x values by -1
+        variables = tracking_mm.Properties.VariableNames;
+        x_variables = variables(contains(variables,"_x"));
+        tracking_mm{:,x_variables} = tracking_mm{:,x_variables} * -1;
+        % multiply poi x values by -1 
+        poi_mm.X = poi_mm.X * -1;
+        % also swap POI labels around. I don't love this. But I can't think of something better.
+        poi_mm({'light_left','light_right'},:) = poi_mm({'light_right','light_left'},:);
+        poi_mm({'sipper_left','sipper_right'},:) = poi_mm({'sipper_right','sipper_left'},:);
+        poi_mm({'corner_UL','corner_UR'},:) = poi_mm({'corner_UR','corner_UL'},:);
+        poi_mm({'corner_LL','corner_LR'},:) = poi_mm({'corner_LR','corner_LL'},:);
+    end
+    
     % Get position and bin
     pos = calc_head_midpoint(tracking_mm);
     [pos_binned,~,~,binX,binY] = histcounts2(pos(:,1), pos(:,2), x_edges, y_edges);
