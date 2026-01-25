@@ -2,6 +2,9 @@
 job_folder = pwd;
 video_table = load_video_csv(job_folder);
 
+% Only run analysis on TACpilot videos
+video_table = video_table(contains(video_table.pi_folder, "_TACpilot_"), :);
+
 % skip rows without a local video path
 missing_video = cellfun(@isempty, video_table.local_path);
 video_table = video_table(~missing_video,:); 
