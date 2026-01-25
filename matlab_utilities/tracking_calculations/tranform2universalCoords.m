@@ -1,14 +1,15 @@
 function [tracking_trans, poi_trans] = tranform2universalCoords(tracking, poi, reference_points)
     known_dist = 420; %known distance in mm
-    % TODO: peform rotational transformation. Right now it assumes horizonal video
-    
-    % Transform by moving to center of reference and scaling by X distance
-    center_ref = mean(reference_points);
-    scale_ref = range(reference_points.X); %Only scaling by X. Also assumes only 2 reference points
-    scale = known_dist/scale_ref;
+    known_points  = [-known_dist/2, 0; known_dist/2, 0];
+
+    reference_points = table2array(reference_points);
+
+    % Estimate the geometric transformation
+    tform = fitgeotform2d(reference_points, known_points, "similarity");
 
     % Transform poi
-    poi_trans = (poi - center_ref) .* scale;
+    poi_trans = poi;
+    poi_trans{:,:} = transformPointsForward(tform, table2array(poi));
 
     % Transform tracking points (just X and Y variables)
     variables = tracking.Properties.VariableNames;
@@ -16,6 +17,22 @@ function [tracking_trans, poi_trans] = tranform2universalCoords(tracking, poi, r
     y_variables = variables(contains(variables,"_y"));
 
     tracking_trans = tracking; % make a copy
-    tracking_trans(:,x_variables) = (tracking(:,x_variables)-center_ref.X) ./ scale;
-    tracking_trans(:,y_variables) = (tracking(:,y_variables)-center_ref.Y) ./ scale;
+    for i=1:length(x_variables)
+        x_nm = x_variables{i};
+        y_nm = y_variables{i};
+
+        % Check that we correctly extracted the X&Y coordinates for the
+        % same body part
+        part_x = strrep(x_nm, "_x","");
+        part_y = strrep(y_nm, "_y","");
+        if part_x ~= part_y
+            error("X and Y body parts not matching (%s & %s) \n", part_x, part_y)
+        end
+
+        % predict new XY
+        xy = [tracking{:,x_nm}, tracking{:,y_nm}];
+        xy = transformPointsForward(tform, xy);
+        tracking_trans{:,x_nm} = xy(:,1);
+        tracking_trans{:,y_nm} = xy(:,2);
+    end
 end
