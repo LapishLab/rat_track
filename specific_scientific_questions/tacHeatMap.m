@@ -19,6 +19,7 @@ y_edges = -max_y:bin_size:max_y;
 % preallocate arrays to save data over sessions
 all_pos = nan(length(x_edges)-1,length(y_edges)-1, height(video_table));
 all_angle = all_pos;
+all_poi = table();
 for ind=1:height(video_table) % Loop through videos
     id = video_table.id{ind};
     poi = load_poi(job_folder, id);
@@ -60,6 +61,10 @@ for ind=1:height(video_table) % Loop through videos
     % save this session in preallocated array
     all_pos(:,:,ind) = pos_binned; 
     all_angle(:,:,ind) = angle_binned; 
+
+    %invert rows/columns of poi table to make saving easier (1 row per session)
+    poi_inv = cell2table(num2cell(poi_mm{:,:},2)', VariableNames=poi_mm.Properties.RowNames);
+    all_poi = cat(1,all_poi,poi_inv);
 
     
     % % %%%%% In progress!! Getting trials and syncing to Med data %%%
@@ -105,19 +110,21 @@ angle_avg125mm = mean_degrees(all_angle(:, :,[31 33 35]), 3, Weights=all_pos(:,:
 save ('tacCPPHeatmapsK99.mat', "pos_avg10mm","angle_avg10mm","pos_avg125mm","angle_avg125mm")
 
 
-%% Sanity check angle calculation
-% Correction!!
-% +90 == Down
-% -90 == Up
 
-figure(101); clf;
-video = load_video(job_folder,id);
-index = 1000:2000;
-for i=index
-    frame = rgb2gray(read(video, i));
-    imagesc(frame)
-    title(angle(i))
-end
+
+%% Sanity check angle calculation
+% % Correction!!
+% % +90 == Down
+% % -90 == Up
+% 
+% figure(101); clf;
+% video = load_video(job_folder,id);
+% index = 1000:2000;
+% for i=index
+%     frame = rgb2gray(read(video, i));
+%     imagesc(frame)
+%     title(angle(i))
+% end
 %%
 
 % 
