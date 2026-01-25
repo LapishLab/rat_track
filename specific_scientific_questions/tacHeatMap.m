@@ -13,9 +13,6 @@ max_y = 100;
 x_edges = -max_x:bin_size:max_x;
 y_edges = -max_y:bin_size:max_y;
 
-% mean angle function
-mean_angle = @(a) rad2deg(atan2(mean(sind(a)), mean(cosd(a))));
-
 % preallocate arrays to save data over sessions
 all_pos = nan(length(x_edges)-1,length(y_edges)-1, height(video_table));
 all_angle = all_pos;
