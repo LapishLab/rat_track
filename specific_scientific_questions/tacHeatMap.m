@@ -49,6 +49,12 @@ for ind=1:height(video_table) % Loop through videos
     
     % Get gaze angle and average in bins
     angle = calc_gaze_angle(tracking_mm);
+    if strcmp(video_table.tac_side{ind}, 'l')
+        % Even though tracking has already been mirrored, 
+        % we still need to rotate the angle calculations
+        % as it depends on L vs R ear identity.
+        angle=angle-180; 
+    end
     bin_inds = [binX,binY];
     bin_inds = bin_inds(~outside,:); %remove those outside the bins
     angle = angle(~outside);%remove those outside the bins
@@ -81,9 +87,12 @@ for ind=1:height(video_table) % Loop through videos
     % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 end
 %%
-pos_avg = mean(all_pos(:, :, [8 9 11]), 3);
-angle_avg = mean_degrees(all_angle(:, :,[8 9 11]), 3, Weights=all_pos(:,:,[8 9 11]));
-figure;
+% inds = [8 9 11]; % average subselection
+inds = 1:size(all_pos,3); % average all
+% inds = strcmp(video_table.tac_side,'r');
+pos_avg = mean(all_pos(:, :, inds), 3);
+angle_avg = mean_degrees(all_angle(:, :,inds), 3, Weights=all_pos(:,:,inds));
+figure(1);
 % plot
 t = tiledlayout(2,1); % Create a 1x2 tiled layout
 ax1 = nexttile;
@@ -91,6 +100,7 @@ img_nan(x_edges,y_edges,pos_avg);
 title("position")
 xlabel('mm from center'); ylabel('mm from center')
 clim([0 1e-3])
+colormap(ax1, 'Parula')
 
 ax2 = nexttile;
 img_nan(x_edges,y_edges,angle_avg);
@@ -110,8 +120,11 @@ angle_avg125mm = mean_degrees(all_angle(:, :,[31 33 35]), 3, Weights=all_pos(:,:
 save ('tacCPPHeatmapsK99.mat', "pos_avg10mm","angle_avg10mm","pos_avg125mm","angle_avg125mm")
 
 
+%% Sanity Check scaling
 
-
+figure(123);clf;
+histogram(all_poi.corner_LL(:,1), 30)
+video_table.id(all_poi.corner_LL(:,1)>0)
 %% Sanity check angle calculation
 % % Correction!!
 % % +90 == Down
