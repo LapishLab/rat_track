@@ -92,17 +92,19 @@ inds = 1:size(all_pos,3); % average all
 % inds = strcmp(video_table.tac_side,'r');
 pos_avg = mean(all_pos(:, :, inds), 3);
 angle_avg = mean_degrees(all_angle(:, :,inds), 3, Weights=all_pos(:,:,inds));
-figure(1);
+figure(1); clf;
 % plot
 t = tiledlayout(2,1); % Create a 1x2 tiled layout
-ax1 = nexttile;
+ax1 = nexttile; hold on
 img_nan(x_edges,y_edges,pos_avg);
 title("position")
 xlabel('mm from center'); ylabel('mm from center')
 clim([0 1e-3])
 colormap(ax1, 'Parula')
+plot_box(all_poi)
+plot_sipper(all_poi)
 
-ax2 = nexttile;
+ax2 = nexttile; hold on
 img_nan(x_edges,y_edges,angle_avg);
 title("angle")
 xlabel('mm from center'); ylabel('mm from center')
@@ -112,6 +114,8 @@ xlabel('mm from center'); ylabel('mm from center')
 % colormap(ax2, jet_wrap);
 colormap(ax2, cardinal_circular_colormap());
 
+plot_box(all_poi)
+plot_sipper(all_poi)
 %% export to .mat
 pos_avg10mm = mean(all_pos(:, :, [8 9 11]), 3);
 angle_avg10mm = mean_degrees(all_angle(:, :,[8 9 11]), 3, Weights=all_pos(:,:,[8 9 11]));
@@ -140,43 +144,22 @@ video_table.id(all_poi.corner_LL(:,1)>0)
 % end
 %%
 
-% 
-% 
-%     for ind_t = 1:length(video_times) % Loop through trials
-% 
-%         t=time(ind_t);
-%         is_trial = tracking.time_oe>t-pre_time & tracking.time_oe<t+post_time;
-%         trial = tracking(is_trial,:);
-%         t_time = trial.time_oe - t;
-% 
-%         if is_left(ind_t)
-%             light = poi{{'light_left'},:};
-%             sipper = poi{{'sipper_left'}, :};
-%         else
-%             light = poi{{'light_right'},:};
-%             sipper = poi{{'sipper_right'}, :};
-%         end
-% 
-%         [~, interest_ind] = min(abs(t_time - t_of_interest));
-%         color = repmat(c_wait, height(trial),1);
-%         for i=1:length(light_start)
-%             is_blinking = t_time>=light_start(i) & t_time<light_stop(i);
-%             color(is_blinking,:) = repmat(c_light, sum(is_blinking), 1);
-%         end
-% 
-%         sip_dist_pix = calc_dist_to_sipper(trial, sipper);
-%         sip_dist_mm = sip_dist_pix*scale_factor(poi);
-% 
-%         approachInd = find(sip_dist_mm < 55);
-%         if ~isempty(approachInd)
-%             approachTime = trial.time_oe(approachInd(1,1));
-%         else
-%             approachTime = NaN;
-%         end
-% 
-%         all_dist(ind, ind_t, :) = interp1(t_time, sip_dist_mm, common_time, 'linear','extrap');
-%         allApproach(ind, ind_t) = approachTime;
-%     end
-% 
-% end
-% 
+function plot_box(poi)
+    poi = mean(poi);
+    box = [
+        poi.corner_UL
+        poi.corner_UR
+        poi.corner_LR
+        poi.corner_LL
+        poi.corner_UL
+        ];
+    plot(box(:,1), box(:,2), 'k--')
+end
+function plot_sipper(poi)
+    poi = mean(poi);
+    xy = [
+        poi.sipper_left
+        poi.sipper_right
+        ];
+    scatter(xy(:,1), xy(:,2), 'k', 'filled')
+end
