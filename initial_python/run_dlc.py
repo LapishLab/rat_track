@@ -1,6 +1,6 @@
 #!/home/lapishla/miniconda3/envs/dlc/bin/python3
 from deeplabcut import analyze_videos, filterpredictions, create_labeled_video
-import sys
+import argparse
 from pathlib import Path
 
 def run_dlc(
@@ -72,6 +72,29 @@ def contains_files(folder, required):
     return all(in_folder)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run DeepLabCut analysis on all .mp4 videos in a folder")
+    parser.add_argument("video_folder", help="Path to folder containing .mp4 videos")
+    parser.add_argument("--project_root", dest="project_root", default=None,
+                        help="Project root directory (defaults to parent of video_folder)")
+    parser.add_argument("--network_path", dest="network_path", default=None,
+                        help="Path to DLC network folder containing config.yaml")
+    parser.add_argument("--shuffle", dest="shuffle", type=int, default=None,
+                        help="Shuffle index to use (default from run_dlc)")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--create_video", dest="create_video", action="store_true",
+                       help="Generate labeled videos")
+    group.add_argument("--no_video", dest="create_video", action="store_false",
+                       help="Do not generate labeled videos")
+    parser.set_defaults(create_video=None)
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    kwargs = {k: v for k, v in vars(args).items() if k != 'video_folder' and v is not None}
+    run_dlc(args.video_folder, **kwargs)
+
+
 if __name__ == "__main__":
-    video_folder = sys.argv[1]
-    run_dlc(video_folder)
+    main()
