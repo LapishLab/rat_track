@@ -2,14 +2,15 @@
 from deeplabcut import analyze_videos, filterpredictions, create_labeled_video
 import argparse
 from pathlib import Path
+from typing import Sequence
 
 def run_dlc(
-    video_folder,
-    project_root = None,
-    create_video = True,
-    network_path = "/research/lapishla/dlc/networks/2CAP-Pi",
-    shuffle=3,
-    ):
+    video_folder: str | Path,
+    project_root: str | Path | None = None,
+    create_video: bool = True,
+    network_path: str | Path = "/research/lapishla/dlc/networks/2CAP-Pi",
+    shuffle: int = 3,
+) -> None:
 
     # Parse arguments
     video_folder = Path(video_folder)
@@ -66,13 +67,13 @@ def run_dlc(
                 )
 
 
-def contains_files(folder, required):
+def contains_files(folder: str | Path, required: Sequence[str]) -> bool:
     folder = Path(folder)
     in_folder = [any(folder.glob(r)) for r in required]
     return all(in_folder)
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run DeepLabCut analysis on all .mp4 videos in a folder")
     parser.add_argument("video_folder", help="Path to folder containing .mp4 videos")
     parser.add_argument("--project_root", dest="project_root", default=None,
@@ -90,7 +91,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main() -> None:
     args = parse_args()
     kwargs = {k: v for k, v in vars(args).items() if k != 'video_folder' and v is not None}
     run_dlc(args.video_folder, **kwargs)
