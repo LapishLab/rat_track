@@ -1,3 +1,4 @@
+#!/home/lapishla/miniconda3/envs/openCV/bin/python
 import sys
 import pandas as pd
 from os.path import join, basename, splitext
