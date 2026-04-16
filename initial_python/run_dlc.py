@@ -25,6 +25,7 @@ def run_dlc(
     output_root = project_root / f'dlc-results_{network_path.name}_shuff{shuffle}'
     config =  network_path / 'config.yaml'
 
+    failed_videos = []
     for v in video_folder.glob('*.mp4'):
         output_folder = output_root / v.stem
         output_folder.mkdir(parents=True, exist_ok=True)
@@ -32,21 +33,26 @@ def run_dlc(
         if contains_files(output_folder, ['*filtered.csv','*filtered.h5','*meta.pickle']):
             print(f'DLC output already present for {v} at {output_folder}. Skipping')
         else:
-            print(f'Starting DLC analysis of {v}')
-            analyze_videos(
-                config=config,
-                videos=[str(v)],
-                destfolder=str(output_folder),
-                save_as_csv=True,
-                shuffle=shuffle
-            )
-            filterpredictions(
-                config=config,
-                video=[str(v)],
-                destfolder=str(output_folder),
-                save_as_csv=True,
-                shuffle=shuffle
-            )
+            try:
+                print(f'Starting DLC analysis of {v}')
+                analyze_videos(
+                    config=config,
+                    videos=[str(v)],
+                    destfolder=str(output_folder),
+                    save_as_csv=True,
+                    shuffle=shuffle
+                )
+                filterpredictions(
+                    config=config,
+                    video=[str(v)],
+                    destfolder=str(output_folder),
+                    save_as_csv=True,
+                    shuffle=shuffle
+                )
+            except Exception as e:
+                print(f"Error processing {v}: {e}")
+                failed_videos.append(v)
+                continue
 
         if create_video:
             if contains_files(output_folder, ['*labeled.mp4']):
@@ -65,6 +71,12 @@ def run_dlc(
                     draw_skeleton=False,
                     shuffle=shuffle
                 )
+    if failed_videos:
+        print("DLC analysis failed for the following videos:")
+        for v in failed_videos:
+            print(f" - {v}")
+    else:
+        print("DLC analysis completed successfully for all videos.")
 
 
 def contains_files(folder: str | Path, required: Sequence[str]) -> bool:
