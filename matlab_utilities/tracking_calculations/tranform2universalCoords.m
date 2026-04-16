@@ -1,4 +1,4 @@
-function [tracking_trans, poi_trans] = tranform2universalCoords(tracking, poi, reference_points)
+function [tracking_trans, poi_trans, tform] = tranform2universalCoords(tracking, poi, reference_points)
     known_dist = 420; %known distance in mm
     known_points  = [-known_dist/2, 0; known_dist/2, 0];
 
