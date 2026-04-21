@@ -1,19 +1,19 @@
 import yaml
-import os
+from pathlib import Path
 import cv2
 import pandas as pd
 import random
 
 def load_settings(job_folder):
     # load default settings from inside repository
-    script_dir = os.path.dirname(__file__)
-    default_yaml = os.path.join(script_dir, 'settings.yaml')
+    script_dir = Path(__file__).parent
+    default_yaml = script_dir / 'settings.yaml'
     with open(default_yaml, 'r') as f:
         settings = yaml.safe_load(f)
 
     # overwrite with custom settings if they exist
-    custom_yaml = os.path.join(job_folder, 'settings.yaml')
-    if os.path.exists(custom_yaml):
+    custom_yaml = Path(job_folder) / 'settings.yaml'
+    if custom_yaml.exists():
         with open(custom_yaml, 'r') as f:
             custom_settings = yaml.safe_load(f)
         if custom_settings: #If any settings were found in the yaml
@@ -22,7 +22,7 @@ def load_settings(job_folder):
 
 
 def csv_path(job_folder):
-    return os.path.join(job_folder, 'videos.csv')
+    return Path(job_folder) / 'videos.csv'
 
 def get_video_info(job_folder):
     return pd.read_csv(csv_path(job_folder))
