@@ -12,8 +12,8 @@ def main(job_folder):
     video_files = [join(video_folder, f) for f in listdir(video_folder) if f.endswith('.mp4')]
     poi_folder = join(job_folder,"poi")
     makedirs(poi_folder, exist_ok=True)
-    for video_path in video_files:
-        print(f"Processing {video_path}")
+    for index, video_path in enumerate(video_files):
+        print(f"Processing {index}/{len(video_files)}: {video_path} ")
         points = select_points(video_path, point_names)
         print(f"Selected points for {video_path}: {points}")
 
