@@ -17,14 +17,14 @@ def main(job_folder, overwrite=False):
         poi_file = poi_folder / f"{video_name}_poi.csv"
 
         if poi_file.is_file() and not overwrite:
-            print(f"Already completed {video_path}, skipping")
+            print(f"Already completed {poi_file.name}, skipping")
             continue
 
-        print(f"Processing {index}/{len(video_files)}: {video_path} ")
+        print(f"Processing {index}/{len(video_files)}: {video_path.name} ")
         points = select_points(video_path, point_names)
         if not points: # User closed the window
             return None
-        print(f"Selected points for {video_path}: {points}")
+        # print(f"Selected points for {video_path}: {points}")
 
         df = pd.DataFrame(points, index=point_names, columns=['X', 'Y'])
         df.to_csv(poi_file)
