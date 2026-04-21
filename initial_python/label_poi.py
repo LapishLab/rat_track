@@ -22,6 +22,8 @@ def main(job_folder, overwrite=False):
 
         print(f"Processing {index}/{len(video_files)}: {video_path} ")
         points = select_points(video_path, point_names)
+        if not points: # User closed the window
+            return None
         print(f"Selected points for {video_path}: {points}")
 
         df = pd.DataFrame(points, index=point_names, columns=['X', 'Y'])

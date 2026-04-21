@@ -33,7 +33,7 @@ def overwrite_video_info(job_folder, video_info):
 def select_points(video_path, point_names):
     f = read_random_frame(video_path) 
     if f is None:
-        return None
+        raise ValueError("Could not read frame from video.")
     
     points = []
     def prompt_next_click():
@@ -56,16 +56,21 @@ def select_points(video_path, point_names):
     prompt_next_click()
     
     while True:
-        key = cv2.waitKey(0)
-        if key == ord('r'):
+        key = cv2.waitKey(1000) # Poll every second to check for window close
+        if cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) <= 0:
+            print("Window closed. Exiting point selection.")
             cv2.destroyAllWindows()
-            return select_points(video_path, point_names)
-        elif key == 32:  # SPACE key to confirm and exit
-            if len(points) < len(point_names):
-                print("Not enough points selected. Please select all points.")
-            else:
+            return None
+        if key != -1: # If a key was pressed then...
+            if key == ord('r'): # if the key was 'r' then start over (reset)
                 cv2.destroyAllWindows()
-                return points
+                return select_points(video_path, point_names)
+            elif key == 32:  # SPACE key to confirm and exit
+                if len(points) < len(point_names):
+                    print("Not enough points selected. Please select all points.")
+                else:
+                    cv2.destroyAllWindows()
+                    return points
 
 def check_table_headers(df, headers):
     for h in headers:
