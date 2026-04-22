@@ -130,19 +130,14 @@ for i=1:height(t) % Loop through videos
     ylim([-max_y max_y])
     axis equal
 
-
-
-
     %% Plot distance to sipper histogram 
     figure(2);
     subplot(2,2,i); hold on
      sip_dist_L = calc_dist_to_sipper(tracking_mm, poi_mm{'sipper_left',:});
      sip_dist_R = calc_dist_to_sipper(tracking_mm, poi_mm{'sipper_right',:});
 
-
      binned_sip_dist_L = histcounts(sip_dist_L, d_edges) / 15;
-     binned_sip_dist_R= histcounts(sip_dist_R, d_edges) / 15;
-     
+     binned_sip_dist_R= histcounts(sip_dist_R, d_edges) / 15;    
 
      stairs(d_edges(2:end), binned_sip_dist_L)
      stairs(d_edges(2:end), binned_sip_dist_R)
@@ -179,26 +174,26 @@ for i=1:height(t) % Loop through videos
         spike_xy_binned = imgaussfilt(spike_xy_binned, smooth_mm/bin_size);
         t_thresh = 0.5; % time (s) required to be considered reliable
         % 
-        % figure(12); clf; hold on;
-        % z = spike_xy_binned ./ pos_binned;
-        % z(pos_binned<t_thresh) = nan;
-        % img_nan(x_edges,y_edges, z); 
-        % c=colorbar; 
-        % c.Label.String = 'Spike rate (Hz)';
-        % colormap('jet')
-        % title(sprintf("Spike rate by position \n%s\ncluster# %i", t.id(i), ii))
-        % poi_name = ["sipper_left", "sipper_right"];
-        % scatter(poi_mm.X(poi_name), poi_mm.Y(poi_name), 'r','*')
-        % plot_circle(poi_mm{'sipper_left',:}, drink_thresh)
-        % plot_corners(poi_mm)
-        % xlabel('mm')
-        % ylabel('mm')
-        % axis equal 
-        % grid on
-        % clim([0 prctile(z(:), 99)])
-        % xlim([-max_x max_x])
-        % ylim([-max_y max_y])
-        % saveas(gcf,sprintf('heatmap_rate_%i_%i.png', i,ii))
+        figure(12); clf; hold on;
+        z = spike_xy_binned ./ pos_binned;
+        z(pos_binned<t_thresh) = nan;
+        img_nan(x_edges,y_edges, z); 
+        c=colorbar; 
+        c.Label.String = 'Spike rate (Hz)';
+        colormap('jet')
+        title(sprintf("Spike rate by position \n%s\ncluster# %i", t.id(i), ii))
+        poi_name = ["sipper_left", "sipper_right"];
+        scatter(poi_mm.X(poi_name), poi_mm.Y(poi_name), 'r','*')
+        plot_circle(poi_mm{'sipper_left',:}, drink_thresh)
+        plot_corners(poi_mm)
+        xlabel('mm')
+        ylabel('mm')
+        axis equal 
+        grid on
+        clim([0 prctile(z(:), 99)])
+        xlim([-max_x max_x])
+        ylim([-max_y max_y])
+        saveas(gcf,sprintf('heatmap_rate_%i_%i.png', i,ii))
 
 
         % Get distance to sipper for each spike
@@ -396,20 +391,20 @@ yline(0,'--k')
 k = 1;
 
 figure(10); clf
-% histogram(coeff(:,k), 30);
-% xlabel('Loading Value');
-% ylabel('Count');
-% title(sprintf('PC%i coefficients (histogram) ', k));
-% grid on;
-
-mountainPlot(coeff(:,k))
-title(sprintf('PC%i coefficients (mountain plot) ', k));
-xline(0,'--k')
+histogram(coeff(:,k), 30);
 xlabel('Loading Value');
-ylabel('Folded probability')
+ylabel('Count');
+title(sprintf('PC%i coefficients (histogram) ', k));
+grid on;
+
+% mountainPlot(coeff(:,k))
+% title(sprintf('PC%i coefficients (mountain plot) ', k));
+% xline(0,'--k')
+% xlabel('Loading Value');
+% ylabel('Folded probability')
 
 
-%% spike train sorted by PCX
+% spike train sorted by PCX
 [~, sInd] = sort(coeff(:,k));
 
 sorted_trains = all_z(sInd, :);
@@ -422,12 +417,12 @@ c = colorbar;
 c.Label.String = "Zscored spike rate";
 colormap('jet')
 
-%% Plot + and - loaders avg spike train
+% Plot + and - loaders avg spike train
 coeff_thresh = 0.01;
 pos = coeff(:,k)>coeff_thresh;
 neg = coeff(:,k)< -coeff_thresh;
 
-figure(11); clf; hold on;
+figure(12); clf; hold on;
 
 y=all_z(pos,:);
 shadedErrorBar(x, y, {@mean, @sem}, 'lineProps', {'Color', 'blue'})
