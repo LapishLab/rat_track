@@ -44,7 +44,8 @@ def main(job_folder):
 
         # filter chain string
         filter_chain = f"{crop},{scale}"
-        if (r.flip_xy):
+
+        if hasattr(r, 'flip_xy') and r.flip_xy:
             filter_chain = filter_chain + ",hflip,vflip"
         
         # Full FFmpeg command
