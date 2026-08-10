@@ -5,13 +5,14 @@ import numpy as np
 import sys
 from utilities import load_settings, get_video_info, overwrite_video_info, select_points, check_table_headers
 from collections import namedtuple
+from pathlib import Path
 
 def main(job_folder):
     # generate IDs for videos
     video_info = get_video_info(job_folder)
     check_table_headers(video_info, ['video_path', 'subject'])
     vi_temp = video_info.copy() # create a copy of the csv table where we can save temporary variables
-    vi_temp['id'] = generate_unique_names(len(vi_temp))
+    vi_temp['id'] = [f'{Path(r.video_path).stem}_subject{r.subject}' for r in vi_temp.itertuples()]
     export_dir = os.path.join(job_folder, 'videos')
     os.makedirs(export_dir, exist_ok=True)
     vi_temp['cropped_path'] =  [os.path.join(export_dir,id+'.mp4') for id in vi_temp.id]
@@ -102,11 +103,6 @@ def calc_crop_coordinates(points, crop_settings):
     # return relevant values in namedtuple
     Coordinates = namedtuple('Coordinates', ['width', 'height', 'x_start', 'y_start'])
     return Coordinates(width.round(), height.round(), x_start.round(), y_start.round())
-
-def generate_unique_names(n):
-    from datetime import datetime
-    date_string = datetime.now().strftime("_%Y%m%d")
-    return [str(s).zfill(3) + date_string for s in range(n)]
 
 
 if __name__ == "__main__":
