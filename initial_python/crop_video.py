@@ -107,5 +107,8 @@ def calc_crop_coordinates(points, crop_settings):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python crop_video.py <job_folder>")
+        sys.exit(1)
     job_folder = sys.argv[1]
     main(job_folder)
