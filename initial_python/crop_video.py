@@ -3,12 +3,13 @@ import os
 import subprocess
 import numpy as np
 import sys
-from utilities import load_settings, get_video_info, overwrite_video_info, select_points
+from utilities import load_settings, get_video_info, overwrite_video_info, select_points, check_table_headers
 from collections import namedtuple
 
 def main(job_folder):
     # generate IDs for videos
     video_info = get_video_info(job_folder)
+    check_table_headers(video_info, ['video_path', 'subject'])
     vi_temp = video_info.copy() # create a copy of the csv table where we can save temporary variables
     vi_temp['id'] = generate_unique_names(len(vi_temp))
     export_dir = os.path.join(job_folder, 'videos')
