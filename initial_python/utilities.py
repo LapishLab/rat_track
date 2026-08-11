@@ -27,6 +27,27 @@ def csv_path(job_folder):
 def get_video_info(job_folder):
     return pd.read_csv(csv_path(job_folder))
 
+
+def resolve_video_path(video_path):
+    """Resolve a missing or directory-valued video path to an MP4 file."""
+    if pd.isna(video_path) or not str(video_path).strip():
+        return video_path
+
+    video_path = Path(video_path)
+    if video_path.is_file():
+        return str(video_path)
+
+    if video_path.is_dir():
+        if (video_path / 'cam').is_dir():
+            video_path = video_path / 'cam'
+        mp4_files = sorted(
+            path for path in video_path.iterdir()
+            if path.suffix.lower() == '.mp4'
+        )
+        if mp4_files:
+            return str(mp4_files[0])
+    return ""  # Return an empty string if no valid video file is found
+
 def overwrite_video_info(job_folder, video_info):
     video_info.to_csv(csv_path(job_folder), index=False)
 

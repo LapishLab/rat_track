@@ -3,7 +3,7 @@ import os
 import subprocess
 import numpy as np
 import sys
-from utilities import load_settings, get_video_info, overwrite_video_info, select_points, check_table_headers
+from utilities import load_settings, get_video_info, overwrite_video_info, resolve_video_path, select_points, check_table_headers
 from collections import namedtuple
 from pathlib import Path
 
@@ -23,7 +23,13 @@ def main(job_folder):
     point_names = ["light left", "light right"]
     vi_temp['points'] = None 
     for r in vi_temp.itertuples():
-            p = select_points(r.video_path, point_names)
+            vid_path = resolve_video_path(r.video_path)
+            if not vid_path:
+                print(f"Video path not found for {r.id} at {r.video_path}. Skipping.")
+                continue
+            else:
+                vi_temp.at[r.Index, 'video_path'] = vid_path  # Update the resolved video path in the DataFrame
+            p = select_points(vid_path, point_names)
             if p:
                 vi_temp.at[r.Index, 'points'] = p
             else:
