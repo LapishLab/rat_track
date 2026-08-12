@@ -8,10 +8,20 @@ from collections import namedtuple
 from pathlib import Path
 
 def main(job_folder):
-    # generate IDs for videos
+    # Load CSV file of video info
     video_info = get_video_info(job_folder)
     check_table_headers(video_info, ['video_path', 'subject'])
     vi_temp = video_info.copy() # create a copy of the csv table where we can save temporary variables
+
+    # Validate video paths
+    vid_path = vi_temp['video_path'].apply(resolve_video_path)
+    is_missing = vid_path.isin([''])
+    if is_missing.any():
+        print('Videos could not be found for the following paths:')
+        [print(p) for p in vi_temp['video_path'][is_missing]]
+    vi_temp['video_path'] = vid_path
+
+    # generate IDs for videos
     vi_temp['id'] = [f'{Path(r.video_path).stem}_subject{r.subject}' for r in vi_temp.itertuples()]
     export_dir = os.path.join(job_folder, 'videos')
     os.makedirs(export_dir, exist_ok=True)
@@ -23,17 +33,13 @@ def main(job_folder):
     point_names = ["light left", "light right"]
     vi_temp['points'] = None 
     for r in vi_temp.itertuples():
-            vid_path = resolve_video_path(r.video_path)
-            if not vid_path:
-                print(f"Video path not found for {r.id} at {r.video_path}. Skipping.")
-                continue
-            else:
-                vi_temp.at[r.Index, 'video_path'] = vid_path  # Update the resolved video path in the DataFrame
-            p = select_points(vid_path, point_names)
-            if p:
-                vi_temp.at[r.Index, 'points'] = p
-            else:
-                print(f"error choosing points for {r.video_path}")
+        if not r.video_path:
+            continue
+        p = select_points(r.video_path, point_names)
+        if p:
+            vi_temp.at[r.Index, 'points'] = p
+        else:
+            print(f"error choosing points for {r.video_path}")
 
     # Create cropping process for each video
     vi_temp['process'] = None  
