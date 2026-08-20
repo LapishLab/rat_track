@@ -82,7 +82,8 @@ def main(job_folder):
     vi_temp['crop_success'] = False 
     for r in vi_temp.itertuples():
         if r.process:
-            stderr_output, _ = r.process.communicate() # wait for process
+            stderr_output: str
+            _, stderr_output = r.process.communicate() # wait for process
             if r.process.returncode == 0:
                 print(f"crop success for {r.id}")
                 vi_temp.at[r.Index, 'crop_success'] = True       
