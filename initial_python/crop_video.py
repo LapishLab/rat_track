@@ -21,7 +21,7 @@ class Coordinates(NamedTuple):
     y_start: int
 
 
-def main(job_folder: str | Path) -> None:
+def main(job_folder: str | Path, skip_existing: bool = True) -> None:
     # Load CSV file of video info
     video_info = get_video_info(job_folder)
     check_table_headers(video_info, ['video_path', 'subject'])
@@ -40,6 +40,7 @@ def main(job_folder: str | Path) -> None:
     export_dir = os.path.join(job_folder, 'videos')
     os.makedirs(export_dir, exist_ok=True)
     vi_temp['cropped_path'] =  [os.path.join(export_dir,id+'.mp4') for id in vi_temp.id]
+    vi_temp['crop_success'] = False
 
     crop_settings: CropSettings = load_settings(job_folder)['crop']
     
@@ -47,6 +48,10 @@ def main(job_folder: str | Path) -> None:
     point_names = ["light left", "light right"]
     vi_temp['points'] = None 
     for r in vi_temp.itertuples():
+        if os.path.isfile(r.cropped_path) and skip_existing:
+            print(f"Cropped video already exists at {r.cropped_path}. Skipping")
+            vi_temp.at[r.Index, 'crop_success'] = True
+            continue
         if not r.video_path:
             continue
         p = select_points(r.video_path, point_names)
@@ -102,7 +107,6 @@ def main(job_folder: str | Path) -> None:
     print("All subprocesses launched.")
 
     # Wait for all processes to complete and collect their output
-    vi_temp['crop_success'] = False 
     for r in vi_temp.itertuples():
         if r.process:
             stderr_output: str
