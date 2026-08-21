@@ -60,22 +60,25 @@ def main(job_folder: str | Path) -> None:
     for r in vi_temp.itertuples():
         if not r.points:
             continue
-        # cropping string
+
+        # cropping and padding strings
         video = cv2.VideoCapture(r.video_path)
         frame_size = (
             int(video.get(cv2.CAP_PROP_FRAME_WIDTH)),
             int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)),
         )
         video.release()
-        c = calc_crop_coordinates(r.points, crop_settings, frame_size)
-        crop = f"crop={c.width}:{c.height}:{c.x_start}:{c.y_start}"
+        c = calc_crop_coordinates(r.points, crop_settings)
+        p = calc_padding(c, frame_size)
+        pad = f"pad={p.width}:{p.height}:{p.x_start}:{p.y_start}:black"
+        crop = f"crop={c.width}:{c.height}:{c.x_start+p.x_start}:{c.y_start+p.y_start}"
 
         # scaling string
         sz = crop_settings['cropped_size']
         scale = f"scale={sz[0]}:{sz[1]}"
 
         # filter chain string
-        filter_chain = f"{crop},{scale}"
+        filter_chain = f"{pad},{crop},{scale}"
 
         if hasattr(r, 'flip_xy') and r.flip_xy:
             filter_chain = filter_chain + ",hflip,vflip"
@@ -117,7 +120,39 @@ def main(job_folder: str | Path) -> None:
     video_info['crop_success'] = vi_temp['crop_success']
     overwrite_video_info(job_folder, video_info)
 
-def calc_crop_coordinates(points, crop_settings):
+def calc_padding(
+    c: Coordinates,
+    frame_size: tuple[int, int],
+) -> Coordinates:
+    frame_width, frame_height = frame_size
+    if frame_width <= 0 or frame_height <= 0:
+        raise ValueError(f"Invalid frame size: {frame_width}x{frame_height}")
+
+    pad_left = 0
+    if c.x_start < 0:
+        pad_left = abs(c.x_start)
+
+    pad_right = 0
+    if c.x_start+c.width > frame_width:
+        pad_right = (c.x_start+c.width) - frame_width
+
+    pad_bottom = 0
+    if c.y_start < 0:
+        pad_bottom = abs(c.y_start)
+
+    pad_top = 0
+    if c.y_start+c.height > frame_height:
+        pad_top = (c.y_start+c.height) - frame_height
+
+
+    width = pad_left + pad_right + frame_width
+    height = pad_bottom + pad_top + frame_height
+    return Coordinates(width, height, pad_left, pad_bottom)
+
+def calc_crop_coordinates(
+    points: Sequence[Sequence[float]],
+    crop_settings: CropSettings,
+) -> Coordinates:
     points = np.array(points)
     x = points[:,0]
     y = points[:,1]
