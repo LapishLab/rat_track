@@ -1,4 +1,6 @@
 
+import ast
+import json
 import os
 import subprocess
 import cv2
@@ -42,11 +44,16 @@ def main(job_folder: str | Path, skip_existing: bool = True) -> None:
     vi_temp['cropped_path'] =  [os.path.join(export_dir,id+'.mp4') for id in vi_temp.id]
     vi_temp['crop_success'] = False
 
-    crop_settings: CropSettings = load_settings(job_folder)['crop']
-    
-    # interactively choose cropping points for each video
     point_names = ["light left", "light right"]
-    vi_temp['points'] = None 
+    if 'points' not in video_info:
+        video_info['points'] = None
+    vi_temp['points'] = [
+        parse_saved_points(points, len(point_names)) for points in video_info['points']
+    ]
+
+    crop_settings: CropSettings = load_settings(job_folder)['crop']
+
+    # Interactively choose and immediately save missing cropping points.
     for r in vi_temp.itertuples():
         if os.path.isfile(r.cropped_path) and skip_existing:
             print(f"Cropped video already exists at {r.cropped_path}. Skipping")
@@ -54,16 +61,21 @@ def main(job_folder: str | Path, skip_existing: bool = True) -> None:
             continue
         if not r.video_path:
             continue
-        p = select_points(r.video_path, point_names)
-        if p:
-            vi_temp.at[r.Index, 'points'] = p
+        if r.points is not None:
+            print(f"Using saved cropping points for {r.video_path}")
+            continue
+        points = select_points(r.video_path, point_names)
+        if points:
+            vi_temp.at[r.Index, 'points'] = points
+            video_info.at[r.Index, 'points'] = json.dumps(points)
+            overwrite_video_info(job_folder, video_info)
         else:
             print(f"error choosing points for {r.video_path}")
 
     # Create cropping process for each video
     vi_temp['process'] = None  
     for r in vi_temp.itertuples():
-        if not r.points:
+        if r.points is None:
             continue
 
         # cropping and padding strings
@@ -123,6 +135,33 @@ def main(job_folder: str | Path, skip_existing: bool = True) -> None:
     video_info['id'] = vi_temp['id'] 
     video_info['crop_success'] = vi_temp['crop_success']
     overwrite_video_info(job_folder, video_info)
+
+
+def parse_saved_points(points: object, expected_count: int) -> list[tuple[float, float]] | None:
+    """Deserialize and validate crop points loaded from the CSV."""
+    if isinstance(points, str):
+        if not points.strip():
+            return None
+        try:
+            points = ast.literal_eval(points)
+        except (SyntaxError, ValueError):
+            return None
+
+    if not isinstance(points, (list, tuple, np.ndarray)) or len(points) != expected_count:
+        return None
+
+    parsed = []
+    for point in points:
+        if not isinstance(point, (list, tuple, np.ndarray)) or len(point) < 2:
+            return None
+        try:
+            x, y = float(point[0]), float(point[1])
+        except (TypeError, ValueError):
+            return None
+        if not np.isfinite(x) or not np.isfinite(y):
+            return None
+        parsed.append((x, y))
+    return parsed
 
 def calc_padding(
     c: Coordinates,
