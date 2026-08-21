@@ -6,8 +6,22 @@ import sys
 from utilities import load_settings, get_video_info, overwrite_video_info, resolve_video_path, select_points, check_table_headers
 from collections import namedtuple
 from pathlib import Path
+from typing import NamedTuple, Sequence, TypedDict
 
-def main(job_folder):
+
+class CropSettings(TypedDict):
+    x_margin: float
+    cropped_size: Sequence[float]
+
+
+class Coordinates(NamedTuple):
+    width: int
+    height: int
+    x_start: int
+    y_start: int
+
+
+def main(job_folder: str | Path) -> None:
     # Load CSV file of video info
     video_info = get_video_info(job_folder)
     check_table_headers(video_info, ['video_path', 'subject'])
@@ -27,7 +41,7 @@ def main(job_folder):
     os.makedirs(export_dir, exist_ok=True)
     vi_temp['cropped_path'] =  [os.path.join(export_dir,id+'.mp4') for id in vi_temp.id]
 
-    crop_settings = load_settings(job_folder)['crop']
+    crop_settings: CropSettings = load_settings(job_folder)['crop']
     
     # interactively choose cropping points for each video
     point_names = ["light left", "light right"]
@@ -115,8 +129,7 @@ def calc_crop_coordinates(points, crop_settings):
     y_start = y.mean() - height/2
 
     # return relevant values in namedtuple
-    Coordinates = namedtuple('Coordinates', ['width', 'height', 'x_start', 'y_start'])
-    return Coordinates(width.round(), height.round(), x_start.round(), y_start.round())
+    return Coordinates(width, height, x_start, y_start)
 
 
 if __name__ == "__main__":
