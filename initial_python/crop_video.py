@@ -1,10 +1,10 @@
 
 import os
 import subprocess
+import cv2
 import numpy as np
 import sys
 from utilities import load_settings, get_video_info, overwrite_video_info, resolve_video_path, select_points, check_table_headers
-from collections import namedtuple
 from pathlib import Path
 from typing import NamedTuple, Sequence, TypedDict
 
@@ -61,7 +61,13 @@ def main(job_folder: str | Path) -> None:
         if not r.points:
             continue
         # cropping string
-        c = calc_crop_coordinates(r.points, crop_settings)
+        video = cv2.VideoCapture(r.video_path)
+        frame_size = (
+            int(video.get(cv2.CAP_PROP_FRAME_WIDTH)),
+            int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+        )
+        video.release()
+        c = calc_crop_coordinates(r.points, crop_settings, frame_size)
         crop = f"crop={c.width}:{c.height}:{c.x_start}:{c.y_start}"
 
         # scaling string
@@ -119,14 +125,14 @@ def calc_crop_coordinates(points, crop_settings):
     # calculate x points from reference and margin
     width = x.max() - x.min()
     margin = crop_settings['x_margin'] * width
-    x_start = x.min() - margin
-    x_stop = x.max() + margin
+    x_start = int(round(x.min() - margin))
+    x_stop = int(round(x.max() + margin))
     width = x_stop - x_start
 
     # calculate y from reference and aspect ratio
     sz = crop_settings['cropped_size']
-    height = width* sz[1] / sz[0]
-    y_start = y.mean() - height/2
+    height = int(round(width* sz[1] / sz[0]))
+    y_start = int(round(y.mean() - height/2))
 
     # return relevant values in namedtuple
     return Coordinates(width, height, x_start, y_start)
