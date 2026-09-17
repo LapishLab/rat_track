@@ -8,8 +8,8 @@ def run_dlc(
     video_folder: str | Path,
     project_root: str | Path | None = None,
     create_video: bool = True,
-    network_path: str | Path = "/research/lapishla/dlc/networks/2CAPandFiber-Pi-2026-08-19",
-    shuffle: int = 2,
+    network_path: str | Path = "/research/lapishla/dlc/networks/2CAP-Pi",
+    shuffle: int = 3,
 ) -> None:
 
     # Parse arguments
@@ -41,26 +41,26 @@ def run_dlc(
         if contains_files(output_folder, ['*filtered.csv','*filtered.h5','*meta.pickle']):
             print(f'DLC output already present for {v} at {output_folder}. Skipping')
         else:
-            try:
-                print(f'Starting DLC analysis of {v}')
-                analyze_videos(
-                    config=config,
-                    videos=[str(v)],
-                    destfolder=str(output_folder),
-                    save_as_csv=True,
-                    shuffle=shuffle
-                )
-                filterpredictions(
-                    config=config,
-                    video=[str(v)],
-                    destfolder=str(output_folder),
-                    save_as_csv=True,
-                    shuffle=shuffle
-                )
-            except Exception as e:
-                print(f"Error processing {v}: {e}")
-                failed_videos.append(v)
-                continue
+            # try:
+            print(f'Starting DLC analysis of {v}')
+            analyze_videos(
+                config=config,
+                videos=[str(v)],
+                destfolder=str(output_folder),
+                save_as_csv=True,
+                shuffle=shuffle
+            )
+            filterpredictions(
+                config=config,
+                video=[str(v)],
+                destfolder=str(output_folder),
+                save_as_csv=True,
+                shuffle=shuffle
+            )
+            # except Exception as e:
+            #     print(f"Error processing {v}: {e}")
+            #     failed_videos.append(v)
+            #     continue
 
         if create_video:
             if contains_files(output_folder, ['*labeled.mp4']):
