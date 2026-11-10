@@ -1,15 +1,14 @@
 
-import ast
-import json
 import os
 import subprocess
 import tempfile
 import cv2
 import numpy as np
 import sys
-from utilities import load_settings, get_video_info, overwrite_video_info, resolve_video_path, select_points, check_table_headers
+from utilities import CropPoints, VideoInfoRow, get_video_rows, load_settings, overwrite_video_rows, select_points
 from pathlib import Path
 from typing import NamedTuple, Sequence, TypedDict
+from pydantic import TypeAdapter
 
 
 class CropSettings(TypedDict):
@@ -25,153 +24,108 @@ class Coordinates(NamedTuple):
 
 
 def main(job_folder: str | Path, skip_existing: bool = True) -> None:
-    # Load CSV file of video info
-    video_info = get_video_info(job_folder)
-    check_table_headers(video_info, ['video_path', 'subject'])
-    vi_temp = video_info.copy() # create a copy of the csv table where we can save temporary variables
+    rows = get_video_rows(job_folder)
 
-    # Validate video paths
-    vid_path = vi_temp['video_path'].apply(resolve_video_path)
-    is_missing = vid_path.isin([''])
-    if is_missing.any():
-        print('Videos could not be found for the following paths:')
-        [print(p) for p in vi_temp['video_path'][is_missing]]
-    vi_temp['video_path'] = vid_path
+    if any('video_path' not in row.model_fields_set for row in rows):
+        raise ValueError('crop_video requires a video_path column')
 
-    # generate IDs for videos
-    vi_temp['id'] = [f'{Path(r.video_path).stem}_subject{r.subject}' for r in vi_temp.itertuples()]
     export_dir = os.path.join(job_folder, 'videos')
     os.makedirs(export_dir, exist_ok=True)
-    vi_temp['cropped_path'] =  [os.path.join(export_dir,id+'.mp4') for id in vi_temp.id]
-    vi_temp['crop_success'] = False
 
     point_names = ["light left", "light right"]
-    if 'points' not in video_info:
-        video_info['points'] = None
-    vi_temp['points'] = [
-        parse_saved_points(points, len(point_names)) for points in video_info['points']
-    ]
 
     crop_settings: CropSettings = load_settings(job_folder)['crop']
 
-    # Interactively choose and immediately save missing cropping points.
-    for r in vi_temp.itertuples():
-        if os.path.isfile(r.cropped_path) and skip_existing:
-            print(f"Cropped video already exists at {r.cropped_path}. Skipping")
-            vi_temp.at[r.Index, 'crop_success'] = True
+    # Choose all missing points before launching any crop processes.
+    for row in rows:
+        video_path = row.video_path
+        row.id = f'{Path(video_path or "").stem}_subject{row.subject}'
+        cropped_path = os.path.join(export_dir, f'{row.id}.mp4')
+        row.crop_success = False
+        if os.path.isfile(cropped_path) and skip_existing:
+            print(f"Cropped video already exists at {cropped_path}. Skipping")
+            row.crop_success = True
             continue
-        if not r.video_path:
+        if not video_path or not os.path.isfile(video_path):
+            print(f"Video could not be found: {row.video_path}")
             continue
-        if r.points is not None:
-            print(f"Using saved cropping points for {r.video_path}")
+        if row.points is not None:
+            print(f"Using saved cropping points for {video_path}")
             continue
-        points = select_points(r.video_path, point_names)
+        points = select_points(video_path, point_names)
         if points:
-            vi_temp.at[r.Index, 'points'] = points
-            video_info.at[r.Index, 'points'] = json.dumps(points)
-            overwrite_video_info(job_folder, video_info)
+            row.points = TypeAdapter(CropPoints).validate_python(points)
+            overwrite_video_rows(job_folder, rows)
     # Create each crop in a temporary directory on the same filesystem as the
     # final output. This keeps incomplete files out of their final locations and
     # allows a successful crop to be installed atomically with os.replace().
-    vi_temp['process'] = None
-    vi_temp['temp_cropped_path'] = None
-    temp_directory = tempfile.TemporaryDirectory(prefix='.crop_video-', dir=export_dir)
-    for r in vi_temp.itertuples():
-        if r.points is None or r.crop_success:
-            continue
+    with tempfile.TemporaryDirectory(prefix='.crop_video-', dir=export_dir) as temp_directory:
+        pending: list[tuple[VideoInfoRow, subprocess.Popen[str], str, str]] = []
+        for row in rows:
+            if row.points is None or row.crop_success:
+                continue
+            video_path = row.video_path
+            if not video_path or not os.path.isfile(video_path):
+                continue
 
-        # cropping and padding strings
-        video = cv2.VideoCapture(r.video_path)
-        frame_size = (
-            int(video.get(cv2.CAP_PROP_FRAME_WIDTH)),
-            int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-        )
-        video.release()
-        c = calc_crop_coordinates(r.points, crop_settings)
-        p = calc_padding(c, frame_size)
-        pad = f"pad={p.width}:{p.height}:{p.x_start}:{p.y_start}:black"
-        crop = f"crop={c.width}:{c.height}:{c.x_start+p.x_start}:{c.y_start+p.y_start}"
+            # cropping and padding strings
+            video = cv2.VideoCapture(video_path)
+            frame_size = (
+                int(video.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+            )
+            video.release()
+            c = calc_crop_coordinates(row.points, crop_settings)
+            p = calc_padding(c, frame_size)
+            pad = f"pad={p.width}:{p.height}:{p.x_start}:{p.y_start}:black"
+            crop = f"crop={c.width}:{c.height}:{c.x_start+p.x_start}:{c.y_start+p.y_start}"
 
-        # scaling string
-        sz = crop_settings['cropped_size']
-        scale = f"scale={sz[0]}:{sz[1]}"
+            # scaling string
+            sz = crop_settings['cropped_size']
+            scale = f"scale={sz[0]}:{sz[1]}"
 
-        # filter chain string
-        filter_chain = f"{pad},{crop},{scale}"
+            # filter chain string
+            filter_chain = f"{pad},{crop},{scale}"
 
-        if hasattr(r, 'flip_xy') and r.flip_xy:
-            filter_chain = filter_chain + ",hflip,vflip"
+            if row.flip_xy:
+                filter_chain = filter_chain + ",hflip,vflip"
 
-        temp_cropped_path = os.path.join(temp_directory.name, f'{r.id}.mp4')
+            temp_cropped_path = os.path.join(temp_directory, f'{row.id}.mp4')
+            cropped_path = os.path.join(export_dir, f'{row.id}.mp4')
 
-        # Full FFmpeg command
-        ffmpeg_cmd = [
-            "ffmpeg",
-            "-y", #automatically overwrite
-            "-i", r.video_path,
-            "-vf", filter_chain,
-            "-c:a", "copy",
-            "-an",
-            temp_cropped_path,
-        ]
+            # Full FFmpeg command
+            ffmpeg_cmd = [
+                "ffmpeg",
+                "-y", #automatically overwrite
+                "-i", video_path,
+                "-vf", filter_chain,
+                "-c:a", "copy",
+                "-an",
+                temp_cropped_path,
+            ]
 
-        process = subprocess.Popen(ffmpeg_cmd, stderr=subprocess.PIPE, text=True)
-        vi_temp.at[r.Index, 'process'] = process
-        vi_temp.at[r.Index, 'temp_cropped_path'] = temp_cropped_path
+            process = subprocess.Popen(ffmpeg_cmd, stderr=subprocess.PIPE, text=True)
+            pending.append((row, process, temp_cropped_path, cropped_path))
 
-    print("All subprocesses launched.")
+        print("All subprocesses launched.")
 
-    # Wait for all processes to complete and collect their output
-    for r in vi_temp.itertuples():
-        if r.process:
-            stderr_output: str
-            _, stderr_output = r.process.communicate() # wait for process
-            if r.process.returncode == 0:
+        # Wait for all processes to complete and collect their output
+        for row, process, temp_cropped_path, cropped_path in pending:
+            _, stderr_output = process.communicate() # wait for process
+            if process.returncode == 0:
                 try:
-                    os.replace(r.temp_cropped_path, r.cropped_path)
+                    os.replace(temp_cropped_path, cropped_path)
                 except OSError as error:
-                    print(f"error saving cropped video for {r.id}: {error}")
+                    print(f"error saving cropped video for {row.id}: {error}")
                 else:
-                    print(f"crop success for {r.id}")
-                    vi_temp.at[r.Index, 'crop_success'] = True
+                    print(f"crop success for {row.id}")
+                    row.crop_success = True
             else:
-                print(f"ffmpeg Error for {r.id}:\n{stderr_output.strip()}")
-
-    temp_directory.cleanup()
+                print(f"ffmpeg Error for {row.id}:\n{(stderr_output or '').strip()}")
 
     print("All subprocesses completed.")
 
-    # Overwrite csv with ID and success flag
-    video_info['id'] = vi_temp['id'] 
-    video_info['crop_success'] = vi_temp['crop_success']
-    overwrite_video_info(job_folder, video_info)
-
-
-def parse_saved_points(points: object, expected_count: int) -> list[tuple[float, float]] | None:
-    """Deserialize and validate crop points loaded from the CSV."""
-    if isinstance(points, str):
-        if not points.strip():
-            return None
-        try:
-            points = ast.literal_eval(points)
-        except (SyntaxError, ValueError):
-            return None
-
-    if not isinstance(points, (list, tuple, np.ndarray)) or len(points) != expected_count:
-        return None
-
-    parsed = []
-    for point in points:
-        if not isinstance(point, (list, tuple, np.ndarray)) or len(point) < 2:
-            return None
-        try:
-            x, y = float(point[0]), float(point[1])
-        except (TypeError, ValueError):
-            return None
-        if not np.isfinite(x) or not np.isfinite(y):
-            return None
-        parsed.append((x, y))
-    return parsed
+    overwrite_video_rows(job_folder, rows)
 
 def calc_padding(
     c: Coordinates,
@@ -203,12 +157,12 @@ def calc_padding(
     return Coordinates(width, height, pad_left, pad_bottom)
 
 def calc_crop_coordinates(
-    points: Sequence[Sequence[float]],
+    points: CropPoints,
     crop_settings: CropSettings,
 ) -> Coordinates:
-    points = np.array(points)
-    x = points[:,0]
-    y = points[:,1]
+    point_array = np.asarray(points, dtype=float)
+    x = point_array[:,0]
+    y = point_array[:,1]
 
     # calculate x points from reference and margin
     width = x.max() - x.min()

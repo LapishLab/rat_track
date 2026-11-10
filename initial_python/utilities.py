@@ -1,16 +1,19 @@
 import ast
+import csv
+import json
 import math
 import yaml
 from pathlib import Path
 import cv2
 import pandas as pd
 import random
-from typing import Annotated
+from typing import Annotated, Sequence
 
-from pydantic import BaseModel, Field, StrictInt, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError, field_validator, model_validator
 
 
 Coordinate = StrictInt | Annotated[float, Field(strict=True, allow_inf_nan=False)]
+CropPoints = tuple[tuple[Coordinate, Coordinate], tuple[Coordinate, Coordinate]]
 
 
 def _is_missing_csv_value(value: object) -> bool:
@@ -19,10 +22,21 @@ def _is_missing_csv_value(value: object) -> bool:
 
 
 class VideoInfoRow(BaseModel):
+    model_config = ConfigDict(extra='allow', validate_assignment=True)
+
     subject: str = Field(min_length=1)
     video_path: str | None = None
     pi_folder: str | None = None
-    points: tuple[tuple[Coordinate, Coordinate], tuple[Coordinate, Coordinate]] | None = None
+    points: CropPoints | None = None
+    flip_xy: bool | None = None
+    id: str | None = None
+    crop_success: bool | None = None
+
+    @model_validator(mode='after')
+    def path_column_present(self) -> 'VideoInfoRow':
+        if not {'video_path', 'pi_folder'}.intersection(self.model_fields_set):
+            raise ValueError('a video_path or pi_folder column is required')
+        return self
 
     @field_validator('subject')
     @classmethod
@@ -31,22 +45,41 @@ class VideoInfoRow(BaseModel):
             raise ValueError('subject must not be empty')
         return value
 
-    @field_validator('video_path', 'pi_folder', mode='before')
+    @field_validator('video_path', 'pi_folder', 'id', 'flip_xy', 'crop_success', mode='before')
     @classmethod
-    def optional_path(cls, value: object) -> object:
-        return None if _is_missing_csv_value(value) else value
+    def optional_csv_value(cls, value: object) -> object:
+        return None if _is_missing_csv_value(value) or value == '' else value
+
+    @field_validator('video_path')
+    @classmethod
+    def resolve_video_path(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        path = Path(value)
+        if path.is_file():
+            return str(path)
+        if path.is_dir():
+            if (path / 'cam').is_dir():
+                path = path / 'cam'
+            mp4_files = sorted(
+                candidate for candidate in path.iterdir()
+                if candidate.suffix.lower() == '.mp4'
+            )
+            if mp4_files:
+                return str(mp4_files[0])
+        return value
 
     @field_validator('points', mode='before')
     @classmethod
     def parse_points(cls, value: object) -> object:
         if _is_missing_csv_value(value) or (isinstance(value, str) and not value.strip()):
             return None
-        if not isinstance(value, str):
-            raise ValueError('points must be a serialized list of two coordinate pairs')
-        try:
-            return ast.literal_eval(value)
-        except (SyntaxError, ValueError) as error:
-            raise ValueError('points must be a serialized list of two coordinate pairs') from error
+        if isinstance(value, str):
+            try:
+                return ast.literal_eval(value)
+            except (SyntaxError, ValueError) as error:
+                raise ValueError('points must be a serialized list of two coordinate pairs') from error
+        return value
 
 
 def load_settings(job_folder):
@@ -80,11 +113,6 @@ def get_video_info(job_folder: str | Path) -> pd.DataFrame:
     table = pd.read_csv(path, dtype={
         'subject': str, 'video_path': str, 'pi_folder': str, 'points': str,
     })
-    if 'subject' not in table:
-        raise ValueError(f'{path}: missing required column "subject"')
-    if not {'video_path', 'pi_folder'}.intersection(table.columns):
-        raise ValueError(f'{path}: expected a "video_path" or "pi_folder" column')
-
     for row_number, row in enumerate(table.to_dict(orient='records'), start=2):
         try:
             VideoInfoRow.model_validate(row)
@@ -93,25 +121,33 @@ def get_video_info(job_folder: str | Path) -> pd.DataFrame:
     return table
 
 
-def resolve_video_path(video_path):
-    """Resolve a missing or directory-valued video path to an MP4 file."""
-    if pd.isna(video_path) or not str(video_path).strip():
-        return video_path
+def get_video_rows(job_folder: str | Path) -> list[VideoInfoRow]:
+    """Read every CSV column and validate each row with Pydantic."""
+    path = csv_path(job_folder)
+    rows: list[VideoInfoRow] = []
+    with path.open(newline='') as file:
+        for row_number, record in enumerate(csv.DictReader(file), start=2):
+            try:
+                rows.append(VideoInfoRow.model_validate(record))
+            except ValidationError as error:
+                raise ValueError(f'{path}: row {row_number}: {error}') from error
+    if not rows:
+        raise ValueError(f'{path}: no video rows')
+    return rows
 
-    video_path = Path(video_path)
-    if video_path.is_file():
-        return str(video_path)
 
-    if video_path.is_dir():
-        if (video_path / 'cam').is_dir():
-            video_path = video_path / 'cam'
-        mp4_files = sorted(
-            path for path in video_path.iterdir()
-            if path.suffix.lower() == '.mp4'
-        )
-        if mp4_files:
-            return str(mp4_files[0])
-    return ""  # Return an empty string if no valid video file is found
+def overwrite_video_rows(job_folder: str | Path, rows: Sequence[VideoInfoRow]) -> None:
+    """Write typed rows to CSV, including columns outside the model schema."""
+    records = [row.model_dump(exclude_unset=True) for row in rows]
+    columns = list(dict.fromkeys(key for record in records for key in record))
+    with csv_path(job_folder).open('w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=columns)
+        writer.writeheader()
+        for record in records:
+            if record.get('points') is not None:
+                record['points'] = json.dumps(record['points'])
+            writer.writerow(record)
+
 
 def overwrite_video_info(job_folder, video_info):
     video_info.to_csv(csv_path(job_folder), index=False)
