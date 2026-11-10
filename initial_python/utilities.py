@@ -1,8 +1,53 @@
+import ast
+import math
 import yaml
 from pathlib import Path
 import cv2
 import pandas as pd
 import random
+from typing import Annotated
+
+from pydantic import BaseModel, Field, StrictInt, ValidationError, field_validator
+
+
+Coordinate = StrictInt | Annotated[float, Field(strict=True, allow_inf_nan=False)]
+
+
+def _is_missing_csv_value(value: object) -> bool:
+    """read_csv uses float NaN for empty cells in otherwise text columns."""
+    return value is None or (isinstance(value, float) and math.isnan(value))
+
+
+class VideoInfoRow(BaseModel):
+    subject: str = Field(min_length=1)
+    video_path: str | None = None
+    pi_folder: str | None = None
+    points: tuple[tuple[Coordinate, Coordinate], tuple[Coordinate, Coordinate]] | None = None
+
+    @field_validator('subject')
+    @classmethod
+    def subject_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError('subject must not be empty')
+        return value
+
+    @field_validator('video_path', 'pi_folder', mode='before')
+    @classmethod
+    def optional_path(cls, value: object) -> object:
+        return None if _is_missing_csv_value(value) else value
+
+    @field_validator('points', mode='before')
+    @classmethod
+    def parse_points(cls, value: object) -> object:
+        if _is_missing_csv_value(value) or (isinstance(value, str) and not value.strip()):
+            return None
+        if not isinstance(value, str):
+            raise ValueError('points must be a serialized list of two coordinate pairs')
+        try:
+            return ast.literal_eval(value)
+        except (SyntaxError, ValueError) as error:
+            raise ValueError('points must be a serialized list of two coordinate pairs') from error
+
 
 def load_settings(job_folder):
     # load default settings from inside repository
@@ -21,11 +66,31 @@ def load_settings(job_folder):
     return settings
 
 
-def csv_path(job_folder):
+def csv_path(job_folder: str | Path) -> Path:
     return Path(job_folder) / 'videos.csv'
 
-def get_video_info(job_folder):
-    return pd.read_csv(csv_path(job_folder))
+def get_video_info(job_folder: str | Path) -> pd.DataFrame:
+    """Load and validate a video table, preserving subject IDs as text.
+
+    A table may start with pi_folder or contain resolved video_path values.
+    Empty video paths and points are allowed so they can be filled in later.
+    Other columns are retained for the different processing stages.
+    """
+    path = csv_path(job_folder)
+    table = pd.read_csv(path, dtype={
+        'subject': str, 'video_path': str, 'pi_folder': str, 'points': str,
+    })
+    if 'subject' not in table:
+        raise ValueError(f'{path}: missing required column "subject"')
+    if not {'video_path', 'pi_folder'}.intersection(table.columns):
+        raise ValueError(f'{path}: expected a "video_path" or "pi_folder" column')
+
+    for row_number, row in enumerate(table.to_dict(orient='records'), start=2):
+        try:
+            VideoInfoRow.model_validate(row)
+        except ValidationError as error:
+            raise ValueError(f'{path}: row {row_number}: {error}') from error
+    return table
 
 
 def resolve_video_path(video_path):

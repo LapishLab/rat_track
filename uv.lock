@@ -3743,12 +3743,14 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "deeplabcut", extra = ["gui"] },
+    { name = "pydantic" },
     { name = "qdarkstyle" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "deeplabcut", extras = ["gui"], specifier = ">=3.0.1" },
+    { name = "pydantic", specifier = ">=2,<3" },
     { name = "qdarkstyle", specifier = ">=3.1" },
 ]
 
