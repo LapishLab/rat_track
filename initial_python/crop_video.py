@@ -1,10 +1,11 @@
 
+import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import subprocess
 import tempfile
 import cv2
 import numpy as np
-import sys
 from utilities import CropPoints, VideoInfoRow, get_video_rows, load_settings, overwrite_video_rows, select_points
 from pathlib import Path
 from typing import NamedTuple, Sequence, TypedDict
@@ -23,7 +24,14 @@ class Coordinates(NamedTuple):
     y_start: int
 
 
-def main(job_folder: str | Path, skip_existing: bool = True) -> None:
+def main(
+    job_folder: str | Path,
+    skip_existing: bool = True,
+    max_processes: int = 20,
+) -> None:
+    if max_processes < 1:
+        raise ValueError('max_processes must be at least 1')
+
     rows = get_video_rows(job_folder)
 
     if any('video_path' not in row.model_fields_set for row in rows):
@@ -56,76 +64,69 @@ def main(job_folder: str | Path, skip_existing: bool = True) -> None:
         if points:
             row.points = TypeAdapter(CropPoints).validate_python(points)
             overwrite_video_rows(job_folder, rows)
-    # Create each crop in a temporary directory on the same filesystem as the
-    # final output. This keeps incomplete files out of their final locations and
-    # allows a successful crop to be installed atomically with os.replace().
+    # Keep incomplete files on the output filesystem until each crop succeeds.
     with tempfile.TemporaryDirectory(prefix='.crop_video-', dir=export_dir) as temp_directory:
-        pending: list[tuple[VideoInfoRow, subprocess.Popen[str], str, str]] = []
-        for row in rows:
-            if row.points is None or row.crop_success:
-                continue
-            video_path = row.video_path
-            if not video_path or not os.path.isfile(video_path):
-                continue
-
-            # cropping and padding strings
-            video = cv2.VideoCapture(video_path)
-            frame_size = (
-                int(video.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            )
-            video.release()
-            c = calc_crop_coordinates(row.points, crop_settings)
-            p = calc_padding(c, frame_size)
-            pad = f"pad={p.width}:{p.height}:{p.x_start}:{p.y_start}:black"
-            crop = f"crop={c.width}:{c.height}:{c.x_start+p.x_start}:{c.y_start+p.y_start}"
-
-            # scaling string
-            sz = crop_settings['cropped_size']
-            scale = f"scale={sz[0]}:{sz[1]}"
-
-            # filter chain string
-            filter_chain = f"{pad},{crop},{scale}"
-
-            if row.flip_xy:
-                filter_chain = filter_chain + ",hflip,vflip"
-
-            temp_cropped_path = os.path.join(temp_directory, f'{row.id}.mp4')
-            cropped_path = os.path.join(export_dir, f'{row.id}.mp4')
-
-            # Full FFmpeg command
-            ffmpeg_cmd = [
-                "ffmpeg",
-                "-y", #automatically overwrite
-                "-i", video_path,
-                "-vf", filter_chain,
-                "-c:a", "copy",
-                "-an",
-                temp_cropped_path,
-            ]
-
-            process = subprocess.Popen(ffmpeg_cmd, stderr=subprocess.PIPE, text=True)
-            pending.append((row, process, temp_cropped_path, cropped_path))
-
-        print("All subprocesses launched.")
-
-        # Wait for all processes to complete and collect their output
-        for row, process, temp_cropped_path, cropped_path in pending:
-            _, stderr_output = process.communicate() # wait for process
-            if process.returncode == 0:
+        with ThreadPoolExecutor(max_workers=max_processes) as pool:
+            futures = {
+                pool.submit(crop_one_video, row, crop_settings, temp_directory, export_dir): row
+                for row in rows
+                if row.points is not None and not row.crop_success
+                and row.video_path and os.path.isfile(row.video_path)
+            }
+            for future in as_completed(futures):
+                row = futures[future]
                 try:
-                    os.replace(temp_cropped_path, cropped_path)
-                except OSError as error:
-                    print(f"error saving cropped video for {row.id}: {error}")
+                    future.result()
+                except (OSError, ValueError, RuntimeError) as error:
+                    print(f"error cropping video for {row.id}: {error}")
                 else:
                     print(f"crop success for {row.id}")
                     row.crop_success = True
-            else:
-                print(f"ffmpeg Error for {row.id}:\n{(stderr_output or '').strip()}")
 
-    print("All subprocesses completed.")
+    print("All crops completed.")
 
     overwrite_video_rows(job_folder, rows)
+
+
+def crop_one_video(
+    row: VideoInfoRow,
+    crop_settings: CropSettings,
+    temp_directory: str,
+    export_dir: str,
+) -> None:
+    video_path = row.video_path
+    points = row.points
+    if video_path is None or points is None:
+        raise ValueError('crop requires a video path and two points')
+
+    video = cv2.VideoCapture(video_path)
+    frame_size = (
+        int(video.get(cv2.CAP_PROP_FRAME_WIDTH)),
+        int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+    )
+    video.release()
+    c = calc_crop_coordinates(points, crop_settings)
+    p = calc_padding(c, frame_size)
+    pad = f"pad={p.width}:{p.height}:{p.x_start}:{p.y_start}:black"
+    crop = f"crop={c.width}:{c.height}:{c.x_start+p.x_start}:{c.y_start+p.y_start}"
+    sz = crop_settings['cropped_size']
+    scale = f"scale={sz[0]}:{sz[1]}"
+    filter_chain = f"{pad},{crop},{scale}"
+    if row.flip_xy:
+        filter_chain += ",hflip,vflip"
+
+    temp_cropped_path = os.path.join(temp_directory, f'{row.id}.mp4')
+    cropped_path = os.path.join(export_dir, f'{row.id}.mp4')
+    result = subprocess.run(
+        ['ffmpeg', '-y', '-i', video_path, '-vf', filter_chain,
+         '-c:a', 'copy', '-an', temp_cropped_path],
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg exited with {result.returncode}: {(result.stderr or '').strip()}")
+    os.replace(temp_cropped_path, cropped_path)
 
 def calc_padding(
     c: Coordinates,
@@ -181,8 +182,11 @@ def calc_crop_coordinates(
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python crop_video.py <job_folder>")
-        sys.exit(1)
-    job_folder = sys.argv[1]
-    main(job_folder)
+    parser = argparse.ArgumentParser(description='Crop videos listed in a job CSV.')
+    parser.add_argument('job_folder')
+    parser.add_argument('--max-processes', type=int, default=4,
+                        help='maximum number of simultaneous FFmpeg processes (default: 4)')
+    args = parser.parse_args()
+    if args.max_processes < 1:
+        parser.error('--max-processes must be at least 1')
+    main(args.job_folder, max_processes=args.max_processes)
