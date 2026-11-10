@@ -193,33 +193,6 @@ def parse_saved_points(points: object, expected_count: int) -> list[tuple[float,
         parsed.append((x, y))
     return parsed
 
-
-def parse_saved_points(points: object, expected_count: int) -> list[tuple[float, float]] | None:
-    """Deserialize and validate crop points loaded from the CSV."""
-    if isinstance(points, str):
-        if not points.strip():
-            return None
-        try:
-            points = ast.literal_eval(points)
-        except (SyntaxError, ValueError):
-            return None
-
-    if not isinstance(points, (list, tuple, np.ndarray)) or len(points) != expected_count:
-        return None
-
-    parsed = []
-    for point in points:
-        if not isinstance(point, (list, tuple, np.ndarray)) or len(point) < 2:
-            return None
-        try:
-            x, y = float(point[0]), float(point[1])
-        except (TypeError, ValueError):
-            return None
-        if not np.isfinite(x) or not np.isfinite(y):
-            return None
-        parsed.append((x, y))
-    return parsed
-
 def calc_padding(
     c: Coordinates,
     frame_size: tuple[int, int],
