@@ -45,14 +45,14 @@ def run_dlc(
             print(f'Starting DLC analysis of {v}')
             analyze_videos(
                 config=config,
-                videos=[str(v)],
+                videos=[v],
                 destfolder=str(output_folder),
                 save_as_csv=True,
                 shuffle=shuffle
             )
             filterpredictions(
                 config=config,
-                video=[str(v)],
+                video=v,
                 destfolder=str(output_folder),
                 save_as_csv=True,
                 shuffle=shuffle
