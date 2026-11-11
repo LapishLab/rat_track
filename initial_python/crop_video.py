@@ -119,7 +119,7 @@ def crop_one_video(
     cropped_path = os.path.join(export_dir, f'{row.id}.mp4')
     result = subprocess.run(
         ['ffmpeg', '-y', '-i', video_path, '-vf', filter_chain,
-         '-c:a', 'copy', '-an', temp_cropped_path],
+         '-vsync', '0', '-c:a', 'copy', '-an', temp_cropped_path],
         stderr=subprocess.PIPE,
         text=True,
         check=False,
