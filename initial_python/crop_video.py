@@ -60,10 +60,14 @@ def main(
         if row.points is not None:
             print(f"Using saved cropping points for {video_path}")
             continue
-        points = select_points(video_path, point_names)
-        if points:
-            row.points = TypeAdapter(CropPoints).validate_python(points)
-            overwrite_video_rows(job_folder, rows)
+        try:
+            points = select_points(video_path, point_names)
+            if points:
+                row.points = TypeAdapter(CropPoints).validate_python(points)
+                overwrite_video_rows(job_folder, rows)
+        except (OSError, ValueError) as error:
+            print(f"error selecting points for {row.id}: {error}")
+            
     # Keep incomplete files on the output filesystem until each crop succeeds.
     with tempfile.TemporaryDirectory(prefix='.crop_video-', dir=export_dir) as temp_directory:
         with ThreadPoolExecutor(max_workers=max_processes) as pool:
