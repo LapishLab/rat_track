@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 import argparse
 from pathlib import Path
-from typing import Sequence, Any
-
+from typing import Sequence
+import deeplabcut as dlc
 def run_dlc(
     video_folder: str | Path,
     project_root: str | Path | None = None,
-    create_video: bool = True,
-    network_path: str | Path = "/research/lapishla/dlc/networks/2CAP-Pi",
-    shuffle: int = 3,
+    create_video: bool = False,
+    overwrite: bool = False,
+    network_path: str | Path = "/research/lapishla/dlc/networks/2CAPandFiber-Pi-2026-08-19/",
+    shuffle: int = 2,
 ) -> None:
 
     # Parse arguments
@@ -36,54 +37,62 @@ def run_dlc(
     for v in videos:
         output_folder = output_root / v.stem
         output_folder.mkdir(parents=True, exist_ok=True)
-        
-        if contains_files(output_folder, ['*filtered.csv','*filtered.h5','*meta.pickle']):
-            print(f'DLC output already present for {v} at {output_folder}. Skipping')
-        else:
-            # try:
-            print(f'Starting DLC analysis of {v}')
-            analyze_videos(
-                config=config,
-                videos=[v],
-                destfolder=str(output_folder),
-                save_as_csv=True,
-                shuffle=shuffle
-            )
-            filterpredictions(
-                config=config,
-                video=v,
-                destfolder=str(output_folder),
-                save_as_csv=True,
-                shuffle=shuffle
-            )
-            # except Exception as e:
-            #     print(f"Error processing {v}: {e}")
-            #     failed_videos.append(v)
-            #     continue
 
+        try:
+            analyze_videos(config, v, output_folder, shuffle, overwrite)
+        except Exception as e:
+            print(f"Error processing {v.name}: {e}")
+            failed_videos.append((v,e))
+            continue
         if create_video:
-            if contains_files(output_folder, ['*labeled.mp4']):
-                print(f'Labeled video already present for {v} at {output_folder}. Skipping')
-            else:
-                print(f'Generating labeled video for {v}')
-                create_labeled_video(
-                    config=config,
-                    videos=[str(v)],
-                    destfolder=str(output_folder),
-                    filtered=True,
-                    trailpoints = 1,
-                    pcutoff = 0,
-                    overwrite = True,
-                    dotsize=1,
-                    draw_skeleton=False,
-                    shuffle=shuffle
-                )
+            generate_video(config, v, output_folder, shuffle, overwrite)
     if failed_videos:
         print("DLC analysis failed for the following videos:")
-        for v in failed_videos:
-            print(f" - {v}")
+        for v, e in failed_videos:
+            print(f" - {v.name} : {e}")
     else:
         print("DLC analysis completed successfully for all videos.")
+
+def generate_video(config: Path, video: Path, output_folder: Path, shuffle: int, overwrite: bool) -> None:
+        if contains_files(output_folder, ['*labeled.mp4']) and not overwrite:
+            print(f'Labeled video already present for {video.name}. Skipping')
+            return
+
+        print(f'Generating labeled video for {video.name}')
+        dlc.create_labeled_video(
+            config=config,
+            videos=[str(video)],
+            destfolder=str(output_folder),
+            filtered=True,
+            trailpoints = 1,
+            pcutoff = 0,
+            overwrite = True,
+            dotsize=1,
+            draw_skeleton=False,
+            shuffle=shuffle
+        )
+    
+def analyze_videos(config: Path, video: Path, output_folder: Path, shuffle: int, overwrite: bool) -> None:
+        required_files = ['*filtered.csv', '*filtered.h5', '*meta.pickle']
+        if contains_files(output_folder, required_files) and not overwrite:
+            print(f'DLC output already present for {video.name}. Skipping')
+            return
+
+        print(f'Starting DLC analysis of {video.name}')
+        dlc.analyze_videos(
+            config=config,
+            videos=[video],
+            destfolder=str(output_folder),
+            save_as_csv=True,
+            shuffle=shuffle
+        )
+        dlc.filterpredictions(
+            config=config,
+            video=video,
+            destfolder=str(output_folder),
+            save_as_csv=True,
+            shuffle=shuffle
+        )
 
 
 def contains_files(folder: str | Path, required: Sequence[str]) -> bool:
@@ -92,7 +101,7 @@ def contains_files(folder: str | Path, required: Sequence[str]) -> bool:
     return all(in_folder)
 
 
-def parse_args() -> dict[str, Any]:
+def parse_args() -> dict[str, str | int | bool]:
     parser = argparse.ArgumentParser(description="Run DeepLabCut analysis on all .mp4 videos in a folder")
     parser.add_argument("video_folder", nargs="?", help="Path to folder containing .mp4 videos")
     parser.add_argument("--project_root", dest="project_root", default=None,
