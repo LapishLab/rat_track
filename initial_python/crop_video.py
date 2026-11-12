@@ -46,16 +46,16 @@ def main(
 
     # Choose all missing points before launching any crop processes.
     for row in rows:
-        video_path = row.video_path
-        row.id = f'{Path(video_path or "").stem}_subject{row.subject}'
-        cropped_path = os.path.join(export_dir, f'{row.id}.mp4')
         row.crop_success = False
+        video_path = row.video_path
+        if not video_path:
+            print(f"Video could not be found: {row.video_path}")
+            continue
+        row.id = f'{Path(video_path).stem}_subject{row.subject}'
+        cropped_path = os.path.join(export_dir, f'{row.id}.mp4')
         if os.path.isfile(cropped_path) and skip_existing:
             print(f"Cropped video already exists at {cropped_path}. Skipping")
             row.crop_success = True
-            continue
-        if not video_path or not os.path.isfile(video_path):
-            print(f"Video could not be found: {row.video_path}")
             continue
         if row.points is not None:
             print(f"Using saved cropping points for {video_path}")
