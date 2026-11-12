@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "deeplabcut[gui]>=3.0.1",
+    "deeplabcut[gui]>=3.0.2",
     "pydantic>=2,<3",
     "qdarkstyle>=3.1",
 ]
