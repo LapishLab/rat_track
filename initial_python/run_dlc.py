@@ -1,5 +1,4 @@
-#!/home/lapishla/miniconda3/envs/dlc/bin/python3
-from deeplabcut import analyze_videos, filterpredictions, create_labeled_video
+#!/usr/bin/env python3
 import argparse
 from pathlib import Path
 from typing import Sequence, Any
